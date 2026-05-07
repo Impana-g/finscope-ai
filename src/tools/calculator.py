@@ -97,3 +97,7 @@ if __name__ == "__main__":
     print(calculate_debt_ratio(30, 100))
 
     print("\n All tests done!")
+
+
+
+    #Aditya's work
