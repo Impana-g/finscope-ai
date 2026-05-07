@@ -1,10 +1,9 @@
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
-
-load_dotenv()
-
+load_dotenv("src/.env")
 _client: Client | None = None
+
 
 def get_supabase() -> Client:
     global _client
@@ -22,6 +21,10 @@ def get_supabase() -> Client:
         print("✅ Supabase connected!")
 
     return _client
+
+
+# THIS IS IMPORTANT
+supabase = get_supabase()
 
 
 if __name__ == "__main__":
