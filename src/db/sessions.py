@@ -1,6 +1,7 @@
 from src.db.client import supabase
 
 
+
 def create_session(user_id, query, sector, depth):
 
     data = {

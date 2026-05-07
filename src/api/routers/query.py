@@ -7,9 +7,9 @@ router = APIRouter()
 
 from pydantic import BaseModel
 
-from src.db.sessions import (
-    create_session
-)
+from src.db.sessions import create_session
+from src.agents.planner import generate_plan
+from src.db.reports import save_research_plan
 
 OUT_OF_SCOPE = [
     "recipe",
@@ -80,11 +80,22 @@ async def start_research(req: QueryRequest):
         depth=req.depth
     )
 
+    plan = generate_plan(
+        req.query,
+        sector
+    )
+
+    save_research_plan(
+        session["id"],
+        plan
+    )
+
     return {
         "session_id": session["id"],
         "status": "awaiting_approval",
         "sector": sector,
-        "message": "Research session created"
+        "plan": plan,
+        "message": "Research session and plan created"
     }
 
 
