@@ -305,3 +305,50 @@ async def run_research_placeholder(session_id: str):
     """
     print(f"🔬 Research started for session: {session_id}")
     print("   (AI agent will be connected on merge day)")
+# src/api/routers/sessions.py
+
+from fastapi import APIRouter, HTTPException
+from src.db.sessions import (
+    get_session, update_session_status,
+    approve_session_plan, get_session_steps,
+    get_all_sessions, delete_session
+)
+
+router = APIRouter()
+
+@router.get("/{session_id}")
+def get_session_status(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    steps = get_session_steps(session_id)
+    return {
+        "session": session,
+        "steps": steps,
+        "steps_completed": len(steps)
+    }
+
+@router.patch("/{session_id}/approve")
+def approve_plan(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    approve_session_plan(session_id)
+    return {
+        "session_id": session_id,
+        "status": "researching",
+        "message": "Plan approved — research will begin"
+    }
+
+@router.get("/")
+def list_sessions(user_id: str):
+    sessions = get_all_sessions(user_id)
+    return {"sessions": sessions, "total": len(sessions)}
+
+@router.delete("/{session_id}")
+def cancel_session(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    delete_session(session_id)
+    return {"message": "Session deleted"}
