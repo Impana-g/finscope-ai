@@ -18,6 +18,7 @@ def get_company_ticker(company_name: str) -> str:
     for key, ticker in COMPANY_TICKERS.items(): 
         if key in name_lower: 
             return ticker
+    return company_name
 def format_number(value) -> str:
         if value is None: 
             return "N/A" 
