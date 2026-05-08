@@ -1,22 +1,42 @@
-from fastapi import FastAPI
-
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from src.api.routers.query import router as query_router
 
 app = FastAPI(
     title="FinScope AI",
-    version="1.0.0"
+    version="2.0.0",
+    description="AI-powered financial research for IT and Pharma"
 )
 
-app.include_router(
-    query_router,
-    prefix="/query",
-    tags=["Query"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
+
+app.include_router(query_router, prefix="/query", tags=["Research"])
 
 
 @app.get("/")
 def home():
-
     return {
-        "message": "FinScope AI backend running"
+        "service": "FinScope AI",
+        "version": "2.0.0",
+        "status": "running",
+        "docs": "/docs"
     }
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "FinScope AI"}
+
+
+@app.exception_handler(404)
+async def not_found(request: Request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={"error": "not_found", "hint": "Check /docs for all endpoints"}
+    )
