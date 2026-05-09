@@ -24,7 +24,7 @@ Query: {state['original_query']}"""
 
     try:
         response = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-sonnet-4-20250514",
             max_tokens=100,
             messages=[{"role": "user", "content": prompt}]
         )
