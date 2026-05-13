@@ -14,7 +14,7 @@ try:
     from src.api.routers import query  # type: ignore
     QUERY_ROUTER_READY = True
 except ImportError:
-    print("⚠️  Query router not ready yet (Skandan's code)")
+    print("[WARNING] Query router not ready yet")
     QUERY_ROUTER_READY = False
 
 
