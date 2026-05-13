@@ -1,133 +1,132 @@
+from typing import Optional, Dict, Any, List
 from src.db.client import get_supabase
 import uuid
 
 
-def create_session(user_id: str, query: str, sector: str, depth: str) -> dict:
+# ── Create ────────────────────────────────────────────────────────────
+
+def create_session(user_id: str, query: str, sector: str, depth: str) -> Dict[str, Any]:
+    """Called by POST /query/"""
     db = get_supabase()
-    depth_steps = {"quick": 5, "standard": 10, "deep": 20}
-    data = {
+    session = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
         "original_query": query,
         "sector": sector,
         "depth": depth,
-        "status": "awaiting_approval",
+        "status": "pending",
         "plan_approved": False,
         "steps_completed": 0,
-        "max_steps": depth_steps.get(depth, 10),
+        "max_steps": {"quick": 5, "standard": 10, "deep": 20}.get(depth, 10),
+        "error": None,
     }
-    result = db.table("research_sessions").insert(data).execute()
-    print(f"✅ Session created: {data['id'][:8]}")
+    result = db.table("research_sessions").insert(session).execute()
     return result.data[0]
 
 
-def get_session(session_id: str) -> dict | None:
+# ── Read ──────────────────────────────────────────────────────────────
+
+def get_session(session_id: str) -> Optional[Dict[str, Any]]:
     db = get_supabase()
-    result = db.table("research_sessions").select("*").eq(
-        "id", session_id
-    ).execute()
+    result = db.table("research_sessions").select("*").eq("id", session_id).execute()
     return result.data[0] if result.data else None
 
 
-def get_all_sessions(user_id: str) -> list:
+def get_all_sessions(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     db = get_supabase()
-    result = db.table("research_sessions").select("*").eq(
-        "user_id", user_id
-    ).order("created_at", desc=True).execute()
-    return result.data
+    query = db.table("research_sessions").select("*").order("created_at", desc=True)
+    if user_id:
+        query = query.eq("user_id", user_id)
+    result = query.execute()
+    return result.data or []
 
 
-def update_session_status(session_id: str, status: str):
+def get_session_steps(session_id: str) -> List[Dict[str, Any]]:
     db = get_supabase()
-    db.table("research_sessions").update(
-        {"status": status}
-    ).eq("id", session_id).execute()
-    print(f"✅ Status updated → {status}")
+    result = (
+        db.table("research_steps")
+        .select("*")
+        .eq("session_id", session_id)
+        .order("step_number")
+        .execute()
+    )
+    return result.data or []
 
 
-def approve_session_plan(session_id: str):
+# ── Update ────────────────────────────────────────────────────────────
+
+def update_session(session_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     db = get_supabase()
-    db.table("research_sessions").update({
-        "plan_approved": True,
-        "status": "researching"
-    }).eq("id", session_id).execute()
+    result = (
+        db.table("research_sessions")
+        .update(updates)
+        .eq("id", session_id)
+        .execute()
+    )
+    return result.data[0] if result.data else None
 
 
-def increment_steps(session_id: str, steps_completed: int):
+def update_session_status(session_id: str, status: str) -> None:
+    """Called by query.py after plan generation."""
+    update_session(session_id, {"status": status})
+
+
+def approve_session_plan(session_id: str) -> None:
+    """Called by PATCH /sessions/{id}/approve"""
+    update_session(session_id, {"plan_approved": True, "status": "awaiting_approval"})
+
+
+def save_research_plan(session_id: str, plan: dict) -> None:
+    """Called by query.py after Claude generates the research plan."""
+    update_session(session_id, {"research_plan": plan})
+
+
+# ── Steps ─────────────────────────────────────────────────────────────
+
+def save_research_step(
+    session_id: str,
+    step_number: int,
+    query: str,
+    tool: str,
+    finding: str,
+    confidence: float,
+    raw_data: dict,
+    sources: list,
+) -> None:
+    """Called by researcher.py after each research step completes."""
     db = get_supabase()
-    db.table("research_sessions").update({
-        "steps_completed": steps_completed
-    }).eq("id", session_id).execute()
-
-
-def delete_session(session_id: str):
-    db = get_supabase()
-    db.table("research_sessions").delete().eq(
-        "id", session_id
-    ).execute()
-
-
-def save_research_plan(session_id: str, plan: dict) -> dict:
-    db = get_supabase()
-    data = {
+    db.table("research_steps").insert({
         "id": str(uuid.uuid4()),
         "session_id": session_id,
-        "dimensions": plan.get("dimensions", []),
-        "planned_steps": plan.get("planned_steps", []),
-        "sources_to_use": plan.get("sources_to_use", ["web", "yfinance"]),
-        "estimated_depth": plan.get("estimated_depth", "standard"),
-    }
-    result = db.table("research_plans").insert(data).execute()
-    return result.data[0]
-
-
-def save_research_step(session_id: str, step_num: int, query: str,
-                       tool: str, finding: str, confidence: float,
-                       raw_data: dict, sources: list) -> dict:
-    db = get_supabase()
-    data = {
-        "id": str(uuid.uuid4()),
-        "session_id": session_id,
-        "step_number": step_num,
+        "step_number": step_number,
         "query": query,
-        "tool_used": tool,
+        "tool": tool,
         "finding": finding,
+        "confidence": confidence,
         "raw_data": raw_data,
         "sources": sources,
-        "confidence": confidence,
-    }
-    result = db.table("research_steps").insert(data).execute()
-    return result.data[0]
+    }).execute()
 
 
-def get_session_steps(session_id: str) -> list:
+def increment_steps(session_id: str, step_number: int) -> None:
+    """Called by researcher.py to keep steps_completed in sync."""
+    update_session(session_id, {"steps_completed": step_number})
+
+
+def add_step(session_id: str, step: Dict[str, Any]) -> None:
+    """Generic step insert (used by sessions router)."""
     db = get_supabase()
-    result = db.table("research_steps").select("*").eq(
-        "session_id", session_id
-    ).order("step_number").execute()
-    return result.data
+    db.table("research_steps").insert({
+        "id": str(uuid.uuid4()),
+        "session_id": session_id,
+        **step,
+    }).execute()
 
 
-if __name__ == "__main__":
-    print("Testing sessions...")
+# ── Delete ────────────────────────────────────────────────────────────
 
-    # Create test session
-    session = create_session(
-        user_id="test_user",
-        query="Analyze Infosys financial performance",
-        sector="IT",
-        depth="standard"
-    )
-    print(f"Session ID: {session['id']}")
-
-    # Get it back
-    fetched = get_session(session["id"])
-    print(f"Fetched query: {fetched['original_query']}")
-
-    # Update status
-    update_session_status(session["id"], "completed")
-
-    # Delete test data
-    delete_session(session["id"])
-    print("✅ Deleted test session")
-    print("✅ All sessions tests passed!")
+def delete_session(session_id: str) -> bool:
+    db = get_supabase()
+    db.table("research_steps").delete().eq("session_id", session_id).execute()
+    result = db.table("research_sessions").delete().eq("id", session_id).execute()
+    return bool(result.data)
